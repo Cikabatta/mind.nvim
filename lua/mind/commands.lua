@@ -111,15 +111,30 @@ M.commands = {
 -- Open the data file associated with a node.
 --
 -- If it doesn’t exist, create it first.
-M.open_data = function(tree, node, directory, save_tree, opts)
+M.open_data = function(tree, nodes, directory, save_tree, opts)
+	local parent = nodes.parent
+	local node = nodes.node
 	if node.url then
 		vim.fn.system(string.format('%s "%s"', opts.ui.url_open, node.url))
 		return
 	end
 
 	local data = node.data
+	-- this if statement only runs when we have already create a node. Node creation is not done in this if statement
 	if data == nil then
-		local contents = string.format(opts.edit.data_header, node.contents[1].text)
+
+		mind_indexing.index_node('', nil, tree, nil, opts)
+		local node_index_path
+		for _, item in ipairs(mind_indexing.index) do
+			if item.node.contents[1].text == parent.children[1].contents[1].text then
+				node_index_path = item.path
+				node_index_path = node_index_path:gsub(item.node.contents[1].text, node.contents[1].text)
+				break
+			end
+		end
+
+		-- local contents = string.format(opts.edit.data_header, node.contents[1].text)
+		local contents = string.format(opts.edit.data_header, node_index_path)
 		local should_expand = tree.type ~= mind_node.TreeType.LOCAL_ROOT
 
 		data = mind_data.new_data_file(directory, node.contents[1].text, opts.edit.data_extension, contents, should_expand)
@@ -182,14 +197,16 @@ end
 --
 -- If it doesn’t exist, create it first.
 M.open_data_line = function(tree, line, directory, save_tree, opts)
-	local node = mind_node.get_node_by_line(tree, line)
+	-- local node = mind_node.get_node_by_line(tree, line)
+	local parent,node = mind_node.get_node_and_parent_by_line(tree, line)
 
 	if node == nil then
 		notify('cannot open data; no node', vim.log.levels.ERROR)
 		return
 	end
 
-	M.open_data(tree, node, directory, save_tree, opts)
+	local nodes = {parent = parent, node = node}
+	M.open_data(tree, nodes, directory, save_tree, opts)
 end
 
 -- Open the data file associated with the node under the cursor.
@@ -231,7 +248,8 @@ M.open_data_index = function(tree, directory, save_tree, opts)
 		end,
 		-- sink function
 		function(item)
-			M.open_data(tree, item.node, directory, save_tree, opts)
+			local nodes = {node = item.node}
+			M.open_data(tree, nodes, directory, save_tree, opts)
 		end,
 		opts
 	)
